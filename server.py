@@ -38,7 +38,7 @@ arguments = [
     #"-incognito" # You can add this line to open the browser in incognito mode by default 
 ]
 
-browser_path = "/usr/bin/google-chrome"
+browser_path = "C:/Users/Admin/AppData/Local/Thorium/Application/thorium.exe"
 app = FastAPI()
 
 
@@ -47,6 +47,10 @@ class CookieResponse(BaseModel):
     cookies: Dict[str, str]
     user_agent: str
 
+
+class TokenResponse(BaseModel):
+    token: str
+    user_agent: str
 
 # Function to check if the URL is safe
 def is_safe_url(url: str) -> bool:
@@ -61,7 +65,7 @@ def is_safe_url(url: str) -> bool:
 
 
 # Function to bypass Cloudflare protection
-def bypass_cloudflare(url: str, retries: int, log: bool, proxy: str = None) -> ChromiumPage:
+def bypass_cloudflare(url: str, retries: int, log: bool, proxy: str = None):
 
     options = ChromiumOptions().auto_port()
     if DOCKER_MODE:
@@ -80,8 +84,8 @@ def bypass_cloudflare(url: str, retries: int, log: bool, proxy: str = None) -> C
     try:
         driver.get(url)
         cf_bypasser = CloudflareBypasser(driver, retries, log)
-        cf_bypasser.bypass()
-        return driver
+        captcha_ele = cf_bypasser.bypass()
+        return driver, captcha_ele
     except Exception as e:
         driver.quit()
         raise e
@@ -93,7 +97,7 @@ async def get_cookies(url: str, retries: int = 5, proxy: str = None):
     if not is_safe_url(url):
         raise HTTPException(status_code=400, detail="Invalid URL")
     try:
-        driver = bypass_cloudflare(url, retries, log, proxy)
+        driver, _ = bypass_cloudflare(url, retries, log, proxy)
         cookies = {cookie.get("name", ""): cookie.get("value", " ") for cookie in driver.cookies()}
         user_agent = driver.user_agent
         driver.quit()
@@ -104,11 +108,11 @@ async def get_cookies(url: str, retries: int = 5, proxy: str = None):
 
 # Endpoint to get HTML content and cookies
 @app.get("/html")
-async def get_html(url: str, retries: int = 5, proxy: str = None):
+async def get_html(url: str, retries: int = 10, proxy: str = None):
     if not is_safe_url(url):
         raise HTTPException(status_code=400, detail="Invalid URL")
     try:
-        driver = bypass_cloudflare(url, retries, log, proxy)
+        driver, _ = bypass_cloudflare(url, retries, log, proxy)
         html = driver.html
         cookies_json = {cookie.get("name", ""): cookie.get("value", " ") for cookie in driver.cookies()}
         response = Response(content=html, media_type="text/html")
@@ -119,6 +123,18 @@ async def get_html(url: str, retries: int = 5, proxy: str = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/captcha-key")
+async def get_captcha_key(url: str, retries: int = 10, proxy: str = None):
+    if not is_safe_url(url):
+        raise HTTPException(status_code=400, detail="Invalid URL")
+    try:
+        driver, captcha_ele = bypass_cloudflare(url, retries, log, proxy)
+        token = captcha_ele.attrs["value"]
+        user_agent = driver.user_agent
+        driver.quit()
+        return TokenResponse(token=token, user_agent=user_agent)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Main entry point
 if __name__ == "__main__":

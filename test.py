@@ -66,7 +66,7 @@ def main():
     driver = ChromiumPage(addr_or_opts=options)
     try:
         logging.info('Navigating to the demo page.')
-        driver.get('https://nopecha.com/demo/cloudflare')
+        driver.get('https://ioe.vn/oauth/login')
 
         # Where the bypass starts
         logging.info('Starting Cloudflare bypass.')
